@@ -1014,6 +1014,7 @@ class PaladinsAPI(DataCache):
                 matches_response = await self.request(
                     "getmatchdetailsbatch", ','.join(map(str, chunk_ids))
                 )
+                matches_response = list(filter(lambda i: not i["ret_msg"], matches_response))
                 # see if there are any API errors
                 for mpd in matches_response:
                     if mpd["ret_msg"]:  # pragma: no cover
