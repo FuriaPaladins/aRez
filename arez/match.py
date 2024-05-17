@@ -282,6 +282,7 @@ class MatchPlayer(MatchPlayerMixin):
         self.account_level: int = player_data["Account_Level"]
         self.mastery_level: int = player_data["Mastery_Level"]
         self.party_number: int = parties.get(player_data["PartyId"], 0)
+        self.killing_spree: int = player_data["Killing_Spree"]
 
     @property
     def disconnected(self) -> bool:
