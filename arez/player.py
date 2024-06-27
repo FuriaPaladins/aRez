@@ -187,7 +187,7 @@ class PartialPlayer(Expandable["Player"], CacheClient):
             raise NotFound("Player status")
         return PlayerStatus(self, response[0])
 
-    async def get_friends(self) -> list[PartialPlayer]:
+    async def get_friends(self) -> tuple[list[PartialPlayer], list[PartialPlayer]]:
         """
         Fetches the player's friend list.
 
@@ -195,9 +195,10 @@ class PartialPlayer(Expandable["Player"], CacheClient):
 
         Returns
         -------
-        list[PartialPlayer]
+        tuple[list[PartialPlayer], list[PartialPlayer]]
             A list of players this player is friends with.\n
-            Some players might be missing if their profile is set as private.
+            Some players might be missing if their profile is set as private.\n
+            First element is friends, second is blocked players.
 
         Raises
         ------
@@ -212,6 +213,10 @@ class PartialPlayer(Expandable["Player"], CacheClient):
             PartialPlayer(self._api, id=p["player_id"], name=p["name"], platform=p["portal_id"])
             for p in response
             if p["friend_flags"] == "1"  # yes, apparently it's a string
+        ], [
+            PartialPlayer(self._api, id=p["player_id"], name=p["name"], platform=p["portal_id"])
+            for p in response
+            if p["friend_flags"] == "32"
         ]
 
     async def get_loadouts(
