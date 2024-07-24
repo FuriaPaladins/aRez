@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+import datetime
 
 import arez
 import pytest
@@ -29,9 +30,9 @@ async def test_unauthorized(api: arez.PaladinsAPI):
 async def test_session(api: arez.PaladinsAPI):
     # test invalid session
     api._session_key = "ABCDEF"
-    api._session_expires = datetime.utcnow() + timedelta(seconds=30)
+    api._session_expires = datetime.datetime.now(datetime.UTC) + timedelta(seconds=30)
     await api.request("getpatchinfo")
-    api._session_expires = datetime.utcnow() - timedelta(seconds=30)
+    api._session_expires = datetime.datetime.now(datetime.UTC) - timedelta(seconds=30)
     # test normal session
     await api.request("testsession")
     # test explicit session

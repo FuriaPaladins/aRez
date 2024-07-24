@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from itertools import chain
-from datetime import datetime, timedelta
+from datetime import timedelta
+import datetime
 from typing import Any, TYPE_CHECKING, cast
 
 from .items import Device
@@ -151,7 +152,7 @@ class DataCache(Endpoint, CacheClient):
         # Use a lock here to ensure no race condition between checking for an entry
         # and setting a new one. Use separate locks per each language.
         async with self._locks[f"cache_fetch_{language.name}"]:
-            now = datetime.utcnow()
+            now = datetime.datetime.now(datetime.UTC)
             entry = self._cache.get(language)
             if not force_refresh and entry is not None and now < entry._expires_at:
                 logger.debug(

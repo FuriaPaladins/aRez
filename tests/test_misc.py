@@ -1,6 +1,7 @@
 from enum import IntEnum
 from asyncio import Event, wait_for
-from datetime import datetime, timedelta
+from datetime import timedelta
+import datetime
 from typing import TYPE_CHECKING
 
 import arez
@@ -63,7 +64,7 @@ async def test_type_errors(api: arez.PaladinsAPI, player: arez.Player):
     with pytest.raises(TypeError):
         await api.get_matches([1234], "en")  # type: ignore
     # queue not an instance of arez.Queue
-    start = end = datetime.utcnow()
+    start = end = datetime.datetime.now(datetime.UTC)
     with pytest.raises(TypeError):
         ran = False
         async for match in api.get_matches_for_queue(

@@ -6,7 +6,8 @@ import logging
 from hashlib import md5
 from random import gauss
 from platform import python_version
-from datetime import datetime, timedelta
+from datetime import timedelta
+import datetime
 from typing import Any, Literal, overload
 
 from . import responses
@@ -99,7 +100,7 @@ class Endpoint:
         self.url = url.rstrip('/')
         self._session_key = ''
         self._session_lock = asyncio.Lock()
-        self._session_expires = datetime.utcnow()
+        self._session_expires = datetime.datetime.now(datetime.UTC)
         self._http_session = aiohttp.ClientSession(
             headers={"User-Agent": USER_AGENT}, timeout=DEFAULT_TIMEOUT, loop=loop
         )
@@ -353,12 +354,12 @@ class Endpoint:
                 # prepare the URL
                 req_stack = [self.url, f"{method_name}json"]
                 if method_name == "createsession":
-                    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+                    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d%H%M%S")
                     req_stack.extend(
                         (self.__dev_id, self._get_signature(method_name, timestamp), timestamp)
                     )
                 elif method_name == "testsession" and len(data) == 1 and data[0]:
-                    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+                    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d%H%M%S")
                     req_stack.extend((
                         self.__dev_id,
                         self._get_signature(method_name, timestamp),
@@ -367,7 +368,7 @@ class Endpoint:
                     ))
                 elif method_name != "ping":
                     async with self._session_lock:
-                        now = datetime.utcnow()
+                        now = datetime.datetime.now(datetime.UTC)
                         if now >= self._session_expires:
                             session_response = await self.request("createsession")  # recursion
                             session_id = session_response.get("session_id")
@@ -376,7 +377,7 @@ class Endpoint:
                             self._session_key = session_id
                         self._session_expires = now + SESSION_LIFETIME
                     # reacquire the current time
-                    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+                    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d%H%M%S")
                     req_stack.extend((
                         self.__dev_id,
                         self._get_signature(method_name, timestamp),
@@ -412,7 +413,7 @@ class Endpoint:
                         # Invalid session
                         if error == "Invalid session id.":
                             # Invalidate the current session by expiring it, then retry
-                            self._session_expires = datetime.utcnow()
+                            self._session_expires = datetime.datetime.now(datetime.UTC)
                             continue
                         # Daily limit reached
                         elif error == "Daily request limit reached":

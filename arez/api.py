@@ -5,7 +5,8 @@ import aiohttp
 import asyncio
 import logging
 from operator import itemgetter
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
+import datetime
 from inspect import Parameter, signature, iscoroutinefunction
 from typing import Any, Literal, NoReturn, cast, overload, TYPE_CHECKING
 from collections.abc import Coroutine, Iterable, Sequence, Callable, AsyncGenerator
@@ -165,7 +166,7 @@ class PaladinsAPI(DataCache):
             if (
                 not force_refresh
                 and self._server_status is not None
-                and datetime.utcnow() < self._server_status.timestamp + timedelta(minutes=1)
+                and datetime.datetime.now(datetime.UTC) < self._server_status.timestamp + timedelta(minutes=1)
             ):
                 # it hasn't been 1 minute since the last fetch - use cached
                 logger.info(f"api.get_server_status({force_refresh=}) -> using cached")

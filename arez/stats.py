@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+import datetime
 from typing import Literal, cast, TYPE_CHECKING
 
 from . import responses
@@ -65,7 +65,7 @@ class DataUsed:
         The default value is ``7500``.
     """
     def __init__(self, data: responses.DataUsedObject):
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.datetime.now(datetime.UTC)
         self.active_sessions_used: int = data["Active_Sessions"]
         self.active_sessions_limit: int = data["Concurrent_Sessions"]
         self.sessions_used: int = data["Total_Sessions_Today"]

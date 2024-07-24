@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+import datetime
 from typing import Literal, cast, TYPE_CHECKING
 
 from .statuspage import colors
@@ -228,7 +228,7 @@ class ServerStatus(CacheClient):
     def __init__(
         self, api_status: list[responses.ServerStatusObject], group: ComponentGroup | None
     ):
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.datetime.now(datetime.UTC)
         self.all_up: bool
         self.limited_access: bool
         self.status: str
