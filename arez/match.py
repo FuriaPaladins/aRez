@@ -129,7 +129,7 @@ class PartialMatch(MatchPlayerMixin, MatchMixin, Expandable["Match"]):
         self,
         player: PartialPlayer | Player,
         language: Language,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         match_data: responses.HistoryMatchObject,
     ):
         MatchPlayerMixin.__init__(self, player, cache_entry, match_data)
@@ -156,7 +156,7 @@ class PartialMatch(MatchPlayerMixin, MatchMixin, Expandable["Match"]):
         response = await self._api.request("getmatchdetails", self.id)
         if not response:
             raise NotFound("Match")
-        cache_entry = self._api.get_entry(self._language)
+        cache_entry = await self._api._fetch_entry(self._language)
         return Match(self._api, cache_entry, response, {})
 
     def __repr__(self) -> str:
@@ -255,7 +255,7 @@ class MatchPlayer(MatchPlayerMixin):
     def __init__(
         self,
         match: Match,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         player_data: responses.MatchPlayerObject,
         parties: dict[int, int],
         players: dict[int, Player],
@@ -344,7 +344,7 @@ class Match(CacheClient, MatchMixin):
     def __init__(
         self,
         api: DataCache,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         match_data: list[responses.MatchPlayerObject],
         players: dict[int, Player],
     ):
@@ -365,14 +365,10 @@ class Match(CacheClient, MatchMixin):
                     # zero indicates no ban has happened - use None
                     self.bans.append(None)
                     continue
-                ban_champ: Champion | CacheObject | None = None
-                if cache_entry is not None:
-                    ban_champ = cache_entry.champions.get(ban_id)
-                if ban_champ is None:
-                    ban_champ = CacheObject(
-                        id=ban_id,
-                        name=first_player.get(f"Ban_{i}", ''),  # type: ignore[arg-type]
-                    )
+                ban_champ: Champion | CacheObject = cache_entry.champions.get_cached(
+                    ban_id,
+                    first_player.get(f"Ban_{i}", ''),  # type: ignore[arg-type]
+                )
                 self.bans.append(ban_champ)
         self.team1: list[MatchPlayer] = []
         self.team2: list[MatchPlayer] = []
@@ -463,7 +459,7 @@ class LivePlayer(WinLoseMixin, CacheClient):
     def __init__(
         self,
         match: LiveMatch,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         player_data: responses.LivePlayerObject,
         players: dict[int, Player],
     ):
@@ -486,22 +482,13 @@ class LivePlayer(WinLoseMixin, CacheClient):
                 platform=player_data["playerPortalId"],
             )
         self.player: PartialPlayer | Player = player
-        # Champion
-        champion_id: int = player_data["ChampionId"]
-        champion: Champion | CacheObject | None = None
-        if cache_entry is not None:
-            champion = cache_entry.champions.get(champion_id)
-        if champion is None:
-            champion = CacheObject(id=champion_id, name=player_data["ChampionName"])
-        self.champion: Champion | CacheObject = champion
-        # Skin
-        skin_id = player_data["SkinId"]
-        skin: Skin | CacheObject | None = None
-        if cache_entry is not None:
-            skin = cache_entry.skins.get(skin_id)
-        if skin is None:  # pragma: no cover
-            skin = CacheObject(id=skin_id, name=player_data["Skin"])
-        self.skin: Skin | CacheObject = skin
+        # Champion and Skin
+        self.champion: Champion | CacheObject = cache_entry.champions.get_cached(
+            player_data["ChampionId"], player_data["ChampionName"]
+        )
+        self.skin: Skin | CacheObject = cache_entry.skins.get_cached(
+            player_data["SkinId"], player_data["Skin"]
+        )
         # Other
         self.rank: Rank | None
         if match.queue.is_ranked():  # pragma: no cover
@@ -544,7 +531,7 @@ class LiveMatch(CacheClient):
     def __init__(
         self,
         api: DataCache,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         match_data: list[responses.LivePlayerObject],
         players: dict[int, Player],
     ):

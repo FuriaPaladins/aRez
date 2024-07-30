@@ -376,7 +376,7 @@ class PlayerStatus(CacheClient):
         if not self.live_match_id:
             # nothing to fetch
             return None
-        cache_entry = await self._api._ensure_entry(language)
+        cache_entry = await self._api._fetch_entry(language)
         response = await self._api.request("getmatchplayerdetails", self.live_match_id)
         if not response:
             return None

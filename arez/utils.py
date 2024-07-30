@@ -286,9 +286,21 @@ def group_by(iterable: Iterable[_X], key: Callable[[_X], _Y]) -> dict[_Y, list[_
 
 
 class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
-    _list_lookup: list[LookupType] = []
-    _id_lookup: dict[int, Any] = {}
-    _name_lookup: dict[str, Any] = {}
+    def __init__(
+        self,
+        iterable: Iterable[LookupType],
+        *,
+        key: Callable[[LookupType], LookupKeyType] = lambda item: item,  # type: ignore
+    ):
+        self._list_lookup: list[LookupType] = []
+        self._id_lookup: dict[int, LookupType] = {}
+        self._name_lookup: dict[str, LookupType] = {}
+        self._cached_id_lookup: dict[int, CacheObject] = {}
+        self._cached_name_lookup: dict[str, CacheObject] = {}
+        self._key: Callable[[LookupType], LookupKeyType] = key
+
+        for element in iterable:
+            self.add(element)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({repr(self._list_lookup)})"
@@ -322,10 +334,51 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
     def count(self, item: LookupType) -> int:
         return self._list_lookup.count(item)
 
+    def add(self, element: LookupType) -> None:
+        raise NotImplementedError
+
     def get(self, name_or_id: int | str) -> LookupType | list[LookupType] | None:
         if isinstance(name_or_id, str):
             return self._name_lookup.get(name_or_id.lower())
         return self._id_lookup.get(name_or_id)
+
+    def get_cached(
+        self, id: int | None = None, name: str | None = None
+    ) -> LookupType | CacheObject:
+        if id is not None:
+            if not isinstance(id, int):
+                raise ValueError("ID has to be an integer")
+            obj = self.get(id)
+        elif name is not None:
+            if not isinstance(id, str):
+                raise ValueError("Name has to be a string")
+            obj = self.get(name)
+        else:
+            raise TypeError("You have to specify either ID or Name")
+        if obj is not None:
+            return cast(LookupType, obj)
+        # fall back to a CacheObject
+        # check if we can update existing objects with new information
+        kwargs: dict[Any, Any] = {}
+        element: CacheObject | None = None
+        if id is not None:
+            kwargs["id"] = id
+            if id in self._cached_id_lookup:
+                element = self._cached_id_lookup[id]
+                if not element.is_default_name() or name is None:
+                    return element
+        if name is not None:
+            kwargs["name"] = name
+            if element is None and (lower_name := name.lower()) in self._cached_name_lookup:
+                element = self._cached_name_lookup[lower_name]
+                if not element.is_default_id() or id is None:
+                    return element
+        element = CacheObject(**kwargs)
+        if not element.is_default_id():
+            self._cached_id_lookup[element.id] = element
+        if not element.is_default_name():
+            self._cached_name_lookup[element.name.lower()] = element
+        return element
 
     @overload
     def get_fuzzy_matches(
@@ -418,24 +471,15 @@ class Lookup(_LookupBase[LookupKeyType, LookupType]):
         Defaults to an identity function (``lambda item: item``), meaning objects passed
         as the iterable have to be a `CacheObject <arez.CacheObject>` or it's subclass already.
     """
-    def __init__(
-        self,
-        iterable: Iterable[LookupType],
-        *,
-        key: Callable[[LookupType], LookupKeyType] = lambda item: item,  # type: ignore
-    ):
-        self._list_lookup: list[LookupType] = []
-        self._id_lookup: dict[int, LookupType] = {}
-        self._name_lookup: dict[str, LookupType] = {}
-        for element in iterable:
-            self._list_lookup.append(element)
-            cache_key: LookupKeyType = key(element)
-            if not isinstance(cache_key, CacheObject):
-                raise ValueError(
-                    "Key callable needs to return a subclassed instance of CacheObject"
-                )
-            self._id_lookup[cache_key.id] = element
-            self._name_lookup[cache_key.name.lower()] = element
+    def add(self, element: LookupType) -> None:
+        self._list_lookup.append(element)
+        cache_key: LookupKeyType = self._key(element)
+        if not isinstance(cache_key, CacheObject):
+            raise ValueError(
+                "Key callable needs to return a subclassed instance of CacheObject"
+            )
+        self._id_lookup[cache_key.id] = element
+        self._name_lookup[cache_key.name.lower()] = element
 
     def get(self, name_or_id: int | str) -> LookupType | None:
         """
@@ -565,24 +609,18 @@ class LookupGroup(_LookupBase[LookupKeyType, LookupType]):
     the `PartialPlayer.get_loadouts` method return type, to be able to return a list of loadouts
     for each champion.
     """
-    def __init__(
-        self,
-        iterable: Iterable[LookupType],
-        *,
-        key: Callable[[LookupType], LookupKeyType] = lambda item: item,  # type: ignore
-    ):
-        self._list_lookup: list[LookupType] = []
-        self._id_lookup: dict[int, list[LookupType]] = {}
-        self._name_lookup: dict[str, list[LookupType]] = {}
-        for element in iterable:
-            self._list_lookup.append(element)
-            cache_key: LookupKeyType = key(element)
-            if not isinstance(cache_key, CacheObject):
-                raise ValueError(
-                    "Key callable needs to return a subclassed instance of CacheObject"
-                )
-            self._id_lookup.setdefault(cache_key.id, []).append(element)
-            self._name_lookup.setdefault(cache_key.name.lower(), []).append(element)
+    _id_lookup: dict[int, list[LookupType]] = {}  # type: ignore
+    _name_lookup: dict[str, list[LookupType]] = {}  # type: ignore
+
+    def add(self, element: LookupType) -> None:
+        self._list_lookup.append(element)
+        cache_key: LookupKeyType = self._key(element)
+        if not isinstance(cache_key, CacheObject):
+            raise ValueError(
+                "Key callable needs to return a subclassed instance of CacheObject"
+            )
+        self._id_lookup.setdefault(cache_key.id, []).append(element)
+        self._name_lookup.setdefault(cache_key.name.lower(), []).append(element)
 
     def get(self, name_or_id: int | str) -> list[LookupType] | None:
         return cast(Optional[List[LookupType]], super().get(name_or_id))

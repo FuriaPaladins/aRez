@@ -52,10 +52,10 @@ class CacheObject:
         Defaults to ``0`` if not set.
     name : str
         The object's name.\n
-        Defaults to ``Unknown`` if not set.
+        Defaults to ``<Unknown>`` if not set.
     """
     DEFAULT_ID = 0
-    DEFAULT_NAME = "Unknown"
+    DEFAULT_NAME = "<Unknown>"
 
     def __init__(self, *, id: int = DEFAULT_ID, name: str = DEFAULT_NAME):
         self._id: int = id or self.DEFAULT_ID
@@ -69,6 +69,12 @@ class CacheObject:
     @property
     def name(self) -> str:
         return self._name
+
+    def is_default_id(self) -> bool:
+        return self._id == self.DEFAULT_ID
+
+    def is_default_name(self) -> bool:
+        return self._name == self.DEFAULT_NAME
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}: {self._name}({self._id})"
@@ -337,7 +343,7 @@ class MatchPlayerMixin(KDAMixin, CacheClient):
     def __init__(
         self,
         player: Player | PartialPlayer,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         match_data: responses.MatchPlayerObject | responses.HistoryMatchObject,
     ):
         CacheClient.__init__(self, player._api)
@@ -358,22 +364,13 @@ class MatchPlayerMixin(KDAMixin, CacheClient):
         KDAMixin.__init__(
             self, kills=kills, deaths=match_data["Deaths"], assists=match_data["Assists"]
         )
-        # Champion
-        champion_id = match_data["ChampionId"]
-        champion: Champion | CacheObject | None = None
-        if cache_entry is not None:
-            champion = cache_entry.champions.get(champion_id)
-        if champion is None:
-            champion = CacheObject(id=champion_id, name=champion_name)
-        self.champion: Champion | CacheObject = champion
-        # Skin
-        skin_id = match_data["SkinId"]
-        skin: Skin | CacheObject | None = None
-        if cache_entry is not None:
-            skin = cache_entry.skins.get(skin_id)
-        if skin is None:  # pragma: no cover
-            skin = CacheObject(id=skin_id, name=match_data["Skin"])
-        self.skin: Skin | CacheObject = skin
+        # Champion and Skin
+        self.champion: Champion | CacheObject = cache_entry.champions.get_cached(
+            match_data["ChampionId"], champion_name
+        )
+        self.skin: Skin | CacheObject = cache_entry.skins.get_cached(
+            match_data["SkinId"], match_data["Skin"]
+        )
         # Other
         self.player: Player | PartialPlayer = player
         self.credits: int = creds
@@ -400,23 +397,22 @@ class MatchPlayerMixin(KDAMixin, CacheClient):
             item_id = match_data[f"ActiveId{i}"]  # type: ignore[literal-required]
             if not item_id:
                 continue
-            item: Device | CacheObject | None = None
-            if cache_entry is not None:
-                item = cache_entry.items.get(item_id)
-            if item is None:
-                if "hasReplay" in match_data:
-                    # we're in a full match data
-                    item_name = match_data[f"Item_Active_{i}"]  # type: ignore[literal-required]
-                else:
-                    # we're in a partial (player history) match data
-                    item_name = match_data[f"Active_{i}"]  # type: ignore[literal-required]
-                item = CacheObject(id=item_id, name=item_name)
+
+            if "hasReplay" in match_data:
+                # we're in a full match data
+                item_name = match_data[f"Item_Active_{i}"]  # type: ignore[literal-required]
+            else:
+                # we're in a partial (player history) match data
+                item_name = match_data[f"Active_{i}"]  # type: ignore[literal-required]
+            item: Device | CacheObject = cache_entry.items.get_cached(item_id, item_name)
+
             if "hasReplay" in match_data:
                 # we're in a full match data
                 level = match_data[f"ActiveLevel{i}"] + 1  # type: ignore[literal-required]
             else:
                 # we're in a partial (player history) match data
                 level = match_data[f"ActiveLevel{i}"] // 4 + 1  # type: ignore[literal-required]
+
             self.items.append(MatchItem(item, level))
         self.loadout = MatchLoadout(cache_entry, match_data)
 

@@ -263,7 +263,7 @@ class ChampionStats(WinLoseMixin, KDAMixin):
     def __init__(
         self,
         player: PartialPlayer | Player,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         stats_data: responses.ChampionRankObject | responses.ChampionQueueRankObject,
         queue: Queue | None = None,
     ):
@@ -288,12 +288,9 @@ class ChampionStats(WinLoseMixin, KDAMixin):
             stats_data = cast(responses.ChampionQueueRankObject, stats_data)
             champion_id = int(stats_data["ChampionId"])
             champion_name = stats_data["Champion"]
-        champion: Champion | CacheObject | None = None
-        if cache_entry is not None:
-            champion = cache_entry.champions.get(champion_id)
-        if champion is None:
-            champion = CacheObject(id=champion_id, name=champion_name)
-        self.champion: Champion | CacheObject = champion
+        self.champion: Champion | CacheObject = cache_entry.champions.get_cached(
+            champion_id, champion_name
+        )
         self.last_played: datetime = _convert_timestamp(stats_data["LastPlayed"])
         self.level = stats_data.get("Rank", 0)
         self.experience = stats_data.get("Worshippers", 0)

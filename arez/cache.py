@@ -146,8 +146,13 @@ class DataCache(Endpoint, CacheClient):
         return bool(entry)
 
     async def _fetch_entry(
-        self, language: Language, *, force_refresh: bool = False, cache: bool | None = None
-    ) -> CacheEntry | None:
+        self, language: Language | None = None,
+        *,
+        force_refresh: bool = False,
+        cache: bool | None = None,
+    ) -> CacheEntry:
+        if language is None:
+            language = self._default_language
         # Use a lock here to ensure no race condition between checking for an entry
         # and setting a new one. Use separate locks per each language.
         async with self._locks[f"cache_fetch_{language.name}"]:
@@ -163,21 +168,16 @@ class DataCache(Endpoint, CacheClient):
                 f"cache.fetch_entry(language={language.name}, "
                 f"{force_refresh=}, {cache=}) -> fetching new"
             )
-            champions_data = await self.request("getchampions", language.value)
-            items_data = await self.request("getitems", language.value)
-            skins_data = await self.request("getchampionskins", -1, language.value)
-            # Don't strictly enforce skins_data to be there, unless there's no cached entry yet.
-            # The reason is: the skins list that's returned right now is quite incomplete,
-            # and the only useful information it provides, is Rarity. Failing the whole refresh,
-            # just due to the skins list missing, would be quite unfortunate.
-            if not champions_data or not items_data or (entry is None and not skins_data):
-                logger.debug(
-                    f"cache.fetch_entry(language={language.name}, {force_refresh=}, {cache=})"
-                    " -> fetching failed, using cached"
-                )
-                return entry
-            expires_at = now + self.refresh_every
-            entry = CacheEntry(self, language, expires_at, champions_data, items_data, skins_data)
+            champions_data: list[responses.ChampionObject] = []
+            items_data: list[responses.DeviceObject] = []
+            skins_data: list[responses.ChampionSkinObject] = []
+            if self.cache_enabled:
+                champions_data = await self.request("getchampions", language.value)
+                items_data = await self.request("getitems", language.value)
+                skins_data = await self.request("getchampionskins", -1, language.value)
+            entry = CacheEntry(
+                self, language, now + self.refresh_every, champions_data, items_data, skins_data
+            )
             logger.debug(
                 f"cache.fetch_entry(language={language.name}, {force_refresh=}, {cache=})"
                 " -> fetching completed"
@@ -186,15 +186,6 @@ class DataCache(Endpoint, CacheClient):
                 cache = self.cache_enabled
             if cache:
                 self._cache[language] = entry
-        return entry
-
-    async def _ensure_entry(self, language: Language | None) -> CacheEntry | None:
-        if language is None:
-            language = self._default_language
-        if not self.cache_enabled:
-            return self.get_entry(language)
-        logger.debug(f"cache.ensure_entry(language={language.name})")
-        entry = await self._fetch_entry(language)
         return entry
 
     def get_entry(self, language: Language | None = None) -> CacheEntry | None:
