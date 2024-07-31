@@ -350,7 +350,7 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
                 raise ValueError("ID has to be an integer")
             obj = self.get(id)
         elif name is not None:
-            if not isinstance(id, str):
+            if not isinstance(name, str):
                 raise ValueError("Name has to be a string")
             obj = self.get(name)
         else:
