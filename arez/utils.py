@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import sys
 from math import floor
-from collections import OrderedDict
 from difflib import SequenceMatcher
 from functools import partialmethod
 from weakref import WeakValueDictionary
 from datetime import datetime, timedelta
+from collections import abc, OrderedDict, ChainMap
 from operator import itemgetter, attrgetter, eq, ne, lt, le, gt, ge
 from typing import (
     Any,
@@ -297,6 +297,9 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
         self._name_lookup: dict[str, LookupType] = {}
         self._cached_id_lookup: dict[int, CacheObject] = {}
         self._cached_name_lookup: dict[str, CacheObject] = {}
+        self._name_chain_lookup: ChainMap[str, Any] = (
+            ChainMap(self._name_lookup, self._cached_name_lookup)
+        )
         self._key: Callable[[LookupType], LookupKeyType] = key
 
         for element in iterable:
@@ -335,12 +338,10 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
         return self._list_lookup.count(item)
 
     def add(self, element: LookupType) -> None:
+        """
+        Subclasses should use this to implement a way of populating the invernal lookup dicts.
+        """
         raise NotImplementedError
-
-    def get(self, name_or_id: int | str) -> LookupType | list[LookupType] | None:
-        if isinstance(name_or_id, str):
-            return self._name_lookup.get(name_or_id.lower())
-        return self._id_lookup.get(name_or_id)
 
     def _cache_object(
         self, id: int | None = None, name: str | None = None
@@ -390,71 +391,170 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
         return element
 
     @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: Literal[False] = False
+    ) -> LookupType | list[LookupType] | None:
+        ...
+
+    @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: Literal[True]
+    ) -> LookupType | CacheObject | list[LookupType] | list[LookupType | CacheObject] | None:
+        ...
+
+    @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: bool = False
+    ) -> LookupType | CacheObject | list[LookupType] | list[LookupType | CacheObject] | None:
+        ...
+
+    def get(
+        self, name_or_id: int | str, *, with_cached: bool = False
+    ) -> LookupType | list[LookupType] | None:
+        if isinstance(name_or_id, str):
+            if with_cached:
+                return self._name_chain_lookup.get(name_or_id.lower())
+            return self._name_lookup.get(name_or_id.lower())
+        return self._id_lookup.get(name_or_id)
+
+    def get_fuzzy(
+        self, name: str, *, cutoff: float = 0.6, with_cached: bool = False
+    ) -> LookupType | CacheObject | list[LookupType] | list[LookupType | CacheObject] | None:
+        matches = self.get_fuzzy_matches(name, limit=1, cutoff=cutoff, with_cached=with_cached)
+        if matches:
+            return matches[0]
+        return None
+
+    @overload
     def get_fuzzy_matches(
         self,
         name: str,
         *,
         limit: int = 3,
         cutoff: float = 0.6,
+        with_cached: Literal[False] = False,
         with_scores: Literal[False] = False,
     ) -> list[LookupType] | list[list[LookupType]]:
         ...
 
     @overload
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: Literal[True]
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[True],
+        with_scores: Literal[False] = False,
+    ) -> list[LookupType | CacheObject] | list[list[LookupType | CacheObject]]:
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[False] = False,
+        with_scores: Literal[True],
     ) -> list[tuple[LookupType, float]] | list[tuple[list[LookupType], float]]:
         ...
 
     @overload
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: bool = False
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[True],
+        with_scores: Literal[True],
+    ) -> (
+        list[tuple[LookupType | CacheObject, float]]
+        | list[tuple[list[LookupType | CacheObject], float]]
+    ):
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: Literal[False] = False,
     ) -> (
         list[LookupType] | list[list[LookupType]]
+        | list[LookupType | CacheObject] | list[list[LookupType | CacheObject]]
+    ):
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: bool = False,
+    ) -> (
+        list[LookupType] | list[list[LookupType]]
+        | list[LookupType | CacheObject] | list[list[LookupType | CacheObject]]
         | list[tuple[LookupType, float]] | list[tuple[list[LookupType], float]]
+        | list[tuple[LookupType | CacheObject, float]]
+        | list[tuple[list[LookupType | CacheObject], float]]
     ):
         ...
 
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: bool = False
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: bool = False,
     ) -> (
         list[LookupType] | list[list[LookupType]]
+        | list[LookupType | CacheObject] | list[list[LookupType | CacheObject]]
         | list[tuple[LookupType, float]] | list[tuple[list[LookupType], float]]
+        | list[tuple[LookupType | CacheObject, float]]
+        | list[tuple[list[LookupType | CacheObject], float]]
     ):
         if not isinstance(name, str):
-            raise TypeError("The name has to be a string of characters")
+            raise TypeError("name has to be a string")
         if not isinstance(limit, int):
             raise TypeError("limit has to be a positive non-zero integer")
         if not isinstance(cutoff, float):
             raise TypeError("cutoff has to be a float in 0-1 range")
+        # NOTE: The above are TypeError, below are ValueError
         if not limit > 0:
             raise ValueError("limit has to be a positive non-zero integer")
         if not 0 <= cutoff <= 1:
             raise ValueError("cutoff has to be a float in 0-1 range")
 
-        matcher: SequenceMatcher[str] = SequenceMatcher()
-        matcher.set_seq2(name.lower())
-        scores: list[tuple[str, float]] = []
-        for key in self._name_lookup:
-            matcher.set_seq1(key)
+        seq_matcher: SequenceMatcher[str] = SequenceMatcher()
+        seq_matcher.set_seq2(name.lower())
+        scores: list[tuple[LookupType | CacheObject, float]] = []
+        if not with_cached:
+            lookup_bank: abc.Mapping[str, LookupType | CacheObject] = self._name_lookup
+        else:
+            lookup_bank = {**self._name_lookup, **self._cached_name_lookup}
+        for key, element in lookup_bank.items():
+            seq_matcher.set_seq1(key)
             if (
-                matcher.real_quick_ratio() >= cutoff
-                and matcher.quick_ratio() >= cutoff
-                and (score := matcher.ratio()) >= cutoff
+                seq_matcher.real_quick_ratio() >= cutoff
+                and seq_matcher.quick_ratio() >= cutoff
+                and (score := seq_matcher.ratio()) >= cutoff
             ):
-                scores.append((key, score))
+                scores.append((element, score))
         scores.sort(key=itemgetter(1), reverse=True)
         if with_scores:
-            return [(self._name_lookup[key], score) for key, score in scores[:limit]]
-        return [self._name_lookup[key] for key, score in scores[:limit]]
-
-    def get_fuzzy(
-        self, name: str, *, cutoff: float = 0.6
-    ) -> LookupType | list[LookupType] | None:
-        matches = self.get_fuzzy_matches(name, limit=1, cutoff=cutoff)
-        if matches:
-            return matches[0]
-        return None
+            return scores[:limit]
+        return list(map(itemgetter(0), scores[:limit]))
 
 
 class Lookup(_LookupBase[LookupKeyType, LookupType]):
@@ -490,7 +590,27 @@ class Lookup(_LookupBase[LookupKeyType, LookupType]):
         self._id_lookup[cache_key.id] = element
         self._name_lookup[cache_key.name.lower()] = element
 
-    def get(self, name_or_id: int | str) -> LookupType | None:
+    @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: Literal[False] = False
+    ) -> LookupType | None:
+        ...
+
+    @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: Literal[True]
+    ) -> LookupType | CacheObject | None:
+        ...
+
+    @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: bool = False
+    ) -> LookupType | CacheObject | None:
+        ...
+
+    def get(
+        self, name_or_id: int | str, with_cached: bool = False
+    ) -> LookupType | CacheObject | None:
         """
         Allows you to quickly lookup an element by it's Name or ID.
 
@@ -509,7 +629,40 @@ class Lookup(_LookupBase[LookupKeyType, LookupType]):
             The element requested.\n
             `None` is returned if the requested element couldn't be found.
         """
-        return cast(Optional[LookupType], super().get(name_or_id))
+        return cast(Optional[LookupType], super().get(name_or_id, with_cached=with_cached))
+
+    def get_fuzzy(
+        self, name: str, *, cutoff: float = 0.6, with_cached: bool = False
+    ) -> LookupType | CacheObject | None:
+        """
+        Simplified version of `get_fuzzy_matches`, allowing you to search for a single element,
+        or receive `None` if no matching element was found.
+
+        Parameters
+        ----------
+        name : str
+            The name of the element you want to lookup.
+        cutoff : float, optional
+            The similarity score cutoff range. See: `get_fuzzy_matches` for more information.\n
+            Defaults to ``0.6``.
+
+        Returns
+        -------
+        LookupType | None
+            The element requested.\n
+            `None` is returned if the requested element couldn't be found.
+
+        Raises
+        ------
+        TypeError
+            ``name`` or ``cutoff`` arguments are of incorrect type
+        ValueError
+            ``cutoff`` argument has an incorrect value
+        """
+        return cast(
+            Optional[Union[LookupType, CacheObject]],
+            super().get_fuzzy(name, cutoff=cutoff, with_cached=with_cached),
+        )
 
     @overload
     def get_fuzzy_matches(
@@ -518,25 +671,90 @@ class Lookup(_LookupBase[LookupKeyType, LookupType]):
         *,
         limit: int = 3,
         cutoff: float = 0.6,
+        with_cached: Literal[False] = False,
         with_scores: Literal[False] = False,
     ) -> list[LookupType]:
         ...
 
     @overload
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: Literal[True]
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[True],
+        with_scores: Literal[False] = False,
+    ) -> list[LookupType | CacheObject]:
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[False] = False,
+        with_scores: Literal[True],
     ) -> list[tuple[LookupType, float]]:
         ...
 
     @overload
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: bool = False
-    ) -> list[LookupType] | list[tuple[LookupType, float]]:
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[True],
+        with_scores: Literal[True],
+    ) -> list[tuple[LookupType | CacheObject, float]]:
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: Literal[False] = False,
+    ) -> list[LookupType] | list[LookupType | CacheObject]:
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: bool = False,
+    ) -> (
+        list[LookupType]
+        | list[LookupType | CacheObject]
+        | list[tuple[LookupType, float]]
+        | list[tuple[LookupType | CacheObject, float]]
+    ):
         ...
 
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: bool = False
-    ) -> list[LookupType] | list[tuple[LookupType, float]]:
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: bool = False,
+    ) -> (
+        list[LookupType]
+        | list[LookupType | CacheObject]
+        | list[tuple[LookupType, float]]
+        | list[tuple[LookupType | CacheObject, float]]
+    ):
         """
         Performs a fuzzy lookup of an element by it's name,
         by calculating the similarity score between each item. Case-insensitive.\n
@@ -576,37 +794,16 @@ class Lookup(_LookupBase[LookupKeyType, LookupType]):
             ``limit`` or ``cutoff`` arguments have an incorrect value
         """
         return cast(
-            Union[List[LookupType], List[Tuple[LookupType, float]]],
-            super().get_fuzzy_matches(name, limit=limit, cutoff=cutoff, with_scores=with_scores),
+            Union[
+                List[LookupType],
+                List[Union[LookupType, CacheObject]],
+                List[Tuple[LookupType, float]],
+                List[Tuple[Union[LookupType, CacheObject], float]],
+            ],
+            super().get_fuzzy_matches(
+                name, limit=limit, cutoff=cutoff, with_cached=with_cached, with_scores=with_scores
+            ),
         )
-
-    def get_fuzzy(self, name: str, *, cutoff: float = 0.6) -> LookupType | None:
-        """
-        Simplified version of `get_fuzzy_matches`, allowing you to search for a single element,
-        or receive `None` if no matching element was found.
-
-        Parameters
-        ----------
-        name : str
-            The name of the element you want to lookup.
-        cutoff : float, optional
-            The similarity score cutoff range. See: `get_fuzzy_matches` for more information.\n
-            Defaults to ``0.6``.
-
-        Returns
-        -------
-        LookupType | None
-            The element requested.\n
-            `None` is returned if the requested element couldn't be found.
-
-        Raises
-        ------
-        TypeError
-            ``name`` or ``cutoff`` arguments are of incorrect type
-        ValueError
-            ``cutoff`` argument has an incorrect value
-        """
-        return cast(Optional[LookupType], super().get_fuzzy(name, cutoff=cutoff))
 
 
 class LookupGroup(_LookupBase[LookupKeyType, LookupType]):
@@ -631,8 +828,28 @@ class LookupGroup(_LookupBase[LookupKeyType, LookupType]):
         self._id_lookup.setdefault(cache_key.id, []).append(element)
         self._name_lookup.setdefault(cache_key.name.lower(), []).append(element)
 
-    def get(self, name_or_id: int | str) -> list[LookupType] | None:
-        return cast(Optional[List[LookupType]], super().get(name_or_id))
+    @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: Literal[False] = False
+    ) -> list[LookupType] | None:
+        ...
+
+    @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: Literal[True]
+    ) -> list[LookupType] | list[LookupType | CacheObject] | None:
+        ...
+
+    @overload
+    def get(
+        self, name_or_id: int | str, *, with_cached: bool = False
+    ) -> list[LookupType] | list[LookupType | CacheObject] | None:
+        ...
+
+    def get(
+        self, name_or_id: int | str, *, with_cached: bool = False
+    ) -> list[LookupType] | list[LookupType | CacheObject] | None:
+        return cast(Optional[List[LookupType]], super().get(name_or_id, with_cached=with_cached))
 
     @overload
     def get_fuzzy_matches(
@@ -641,32 +858,109 @@ class LookupGroup(_LookupBase[LookupKeyType, LookupType]):
         *,
         limit: int = 3,
         cutoff: float = 0.6,
+        with_cached: Literal[False] = False,
         with_scores: Literal[False] = False,
     ) -> list[list[LookupType]]:
         ...
 
     @overload
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: Literal[True]
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[True],
+        with_scores: Literal[False] = False,
+    ) -> list[list[LookupType | CacheObject]]:
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[False] = False,
+        with_scores: Literal[True],
     ) -> list[tuple[list[LookupType], float]]:
         ...
 
     @overload
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: bool = False
-    ) -> list[list[LookupType]] | list[tuple[list[LookupType], float]]:
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: Literal[True],
+        with_scores: Literal[True],
+    ) -> list[tuple[list[LookupType | CacheObject], float]]:
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: Literal[False] = False,
+    ) -> list[list[LookupType]] | list[list[LookupType | CacheObject]]:
+        ...
+
+    @overload
+    def get_fuzzy_matches(
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: bool = False,
+    ) -> (
+        list[list[LookupType]]
+        | list[list[LookupType | CacheObject]]
+        | list[tuple[list[LookupType], float]]
+        | list[tuple[list[LookupType | CacheObject], float]]
+    ):
         ...
 
     def get_fuzzy_matches(
-        self, name: str, *, limit: int = 3, cutoff: float = 0.6, with_scores: bool = False
-    ) -> list[list[LookupType]] | list[tuple[list[LookupType], float]]:
+        self,
+        name: str,
+        *,
+        limit: int = 3,
+        cutoff: float = 0.6,
+        with_cached: bool = False,
+        with_scores: bool = False,
+    ) -> (
+        list[list[LookupType]]
+        | list[list[LookupType | CacheObject]]
+        | list[tuple[list[LookupType], float]]
+        | list[tuple[list[LookupType | CacheObject], float]]
+    ):
         return cast(
-            Union[List[List[LookupType]], List[Tuple[List[LookupType], float]]],
-            super().get_fuzzy_matches(name, limit=limit, cutoff=cutoff, with_scores=with_scores),
+            Union[
+                List[List[LookupType]],
+                List[List[Union[LookupType, CacheObject]]],
+                List[Tuple[List[LookupType], float]],
+                List[Tuple[List[Union[LookupType, CacheObject]], float]],
+            ],
+            super().get_fuzzy_matches(
+                name, limit=limit, cutoff=cutoff, with_cached=with_cached, with_scores=with_scores
+            ),
         )
 
-    def get_fuzzy(self, name: str, *, cutoff: float = 0.6) -> list[LookupType] | None:
-        return cast(Optional[List[LookupType]], super().get_fuzzy(name, cutoff=cutoff))
+    def get_fuzzy(
+        self, name: str, *, cutoff: float = 0.6, with_cached: bool = False
+    ) -> list[LookupType] | list[LookupType | CacheObject] | None:
+        return cast(
+            Optional[Union[List[LookupType], List[Union[LookupType, CacheObject]]]],
+            super().get_fuzzy(name, cutoff=cutoff, with_cached=with_cached),
+        )
 
 
 def chunk(list_to_chunk: list[_X], chunk_length: int) -> Generator[list[_X], None, None]:
