@@ -343,6 +343,12 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
         """
         raise NotImplementedError
 
+    @property
+    def cached(self) -> list[CacheObject]:
+        elements = set(self._cached_id_lookup.values())
+        elements.update(self._cached_name_lookup.values())
+        return list(elements)
+
     def _cache_object(
         self, id: int | None = None, name: str | None = None
     ) -> LookupType | CacheObject:
