@@ -85,6 +85,7 @@ class CacheObject:
                 return self._id == other._id
             elif self._name != self.DEFAULT_NAME and other._name != self.DEFAULT_NAME:
                 return self._name == other._name
+            return False
         return NotImplemented
 
     def __hash__(self) -> int:
