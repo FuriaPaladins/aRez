@@ -51,6 +51,6 @@ class BountyItem(CacheClient):
         final: str = data["final_price"]
         self.final_price: int | None = int(final) if final.isdecimal() else None
         # handle champion
-        self.champion: Champion | CacheObject = cache_entry.champions.get_cached(
+        self.champion: Champion | CacheObject = cache_entry.champions._cache_object(
             data["champion_id"], data["champion_name"]
         )

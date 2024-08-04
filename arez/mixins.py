@@ -365,10 +365,10 @@ class MatchPlayerMixin(KDAMixin, CacheClient):
             self, kills=kills, deaths=match_data["Deaths"], assists=match_data["Assists"]
         )
         # Champion and Skin
-        self.champion: Champion | CacheObject = cache_entry.champions.get_cached(
+        self.champion: Champion | CacheObject = cache_entry.champions._cache_object(
             match_data["ChampionId"], champion_name
         )
-        self.skin: Skin | CacheObject = cache_entry.skins.get_cached(
+        self.skin: Skin | CacheObject = cache_entry.skins._cache_object(
             match_data["SkinId"], match_data["Skin"]
         )
         # Other
@@ -404,7 +404,7 @@ class MatchPlayerMixin(KDAMixin, CacheClient):
             else:
                 # we're in a partial (player history) match data
                 item_name = match_data[f"Active_{i}"]  # type: ignore[literal-required]
-            item: Device | CacheObject = cache_entry.items.get_cached(item_id, item_name)
+            item: Device | CacheObject = cache_entry.items._cache_object(item_id, item_name)
 
             if "hasReplay" in match_data:
                 # we're in a full match data

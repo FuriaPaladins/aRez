@@ -288,7 +288,7 @@ class ChampionStats(WinLoseMixin, KDAMixin):
             stats_data = cast(responses.ChampionQueueRankObject, stats_data)
             champion_id = int(stats_data["ChampionId"])
             champion_name = stats_data["Champion"]
-        self.champion: Champion | CacheObject = cache_entry.champions.get_cached(
+        self.champion: Champion | CacheObject = cache_entry.champions._cache_object(
             champion_id, champion_name
         )
         self.last_played: datetime = _convert_timestamp(stats_data["LastPlayed"])

@@ -342,9 +342,18 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
             return self._name_lookup.get(name_or_id.lower())
         return self._id_lookup.get(name_or_id)
 
-    def get_cached(
+    def _cache_object(
         self, id: int | None = None, name: str | None = None
     ) -> LookupType | CacheObject:
+        """
+        Internal function.
+
+        Use the CacheObject data to substitute in a rich data object (Champion, Item, Talent, etc.)
+        If the object isn't found in the cache, create a new CacheObject and return that instead.
+
+        NOTE: This always creates new objects with the data provided.
+        To only query the information instead, use the ``get`` method.
+        """
         if id is not None:
             if not isinstance(id, int):
                 raise ValueError("ID has to be an integer")
@@ -354,7 +363,7 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
                 raise ValueError("Name has to be a string")
             obj = self.get(name)
         else:
-            raise TypeError("You have to specify either ID or Name")
+            raise TypeError("Either ID or Name are required")
         if obj is not None:
             return cast(LookupType, obj)
         # fall back to a CacheObject

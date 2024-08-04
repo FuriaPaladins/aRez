@@ -219,12 +219,12 @@ class Loadout(CacheObject, CacheClient):
         CacheClient.__init__(self, player._api)
         CacheObject.__init__(self, id=loadout_data["DeckId"], name=loadout_data["DeckName"])
         self.player: PartialPlayer | Player = player
-        self.champion: Champion | CacheObject = cache_entry.champions.get_cached(
+        self.champion: Champion | CacheObject = cache_entry.champions._cache_object(
             loadout_data["ChampionId"], loadout_data["ChampionName"]
         )
         self.cards: list[LoadoutCard] = []
         for card_data in loadout_data["LoadoutItems"]:
-            card: Device | CacheObject = cache_entry.cards.get_cached(
+            card: Device | CacheObject = cache_entry.cards._cache_object(
                 card_data["ItemId"], card_data["ItemName"]
             )
             self.cards.append(LoadoutCard(card, card_data["Points"]))
@@ -309,7 +309,7 @@ class MatchLoadout:
             if not card_id:
                 # skip 0s
                 continue
-            card: Device | CacheObject = cache_entry.cards.get_cached(
+            card: Device | CacheObject = cache_entry.cards._cache_object(
                 card_id,
                 match_data[card_key.format(i)],  # type: ignore[literal-required]
             )
@@ -321,7 +321,7 @@ class MatchLoadout:
         talent_id: int = match_data["ItemId6"]
         self.talent: Device | CacheObject | None = None
         if talent_id:
-            self.talent = cache_entry.talents.get_cached(
+            self.talent = cache_entry.talents._cache_object(
                 talent_id,
                 match_data[talent_key]  # type: ignore[literal-required]
             )

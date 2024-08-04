@@ -365,7 +365,7 @@ class Match(CacheClient, MatchMixin):
                     # zero indicates no ban has happened - use None
                     self.bans.append(None)
                     continue
-                ban_champ: Champion | CacheObject = cache_entry.champions.get_cached(
+                ban_champ: Champion | CacheObject = cache_entry.champions._cache_object(
                     ban_id,
                     first_player.get(f"Ban_{i}", ''),  # type: ignore[arg-type]
                 )
@@ -483,10 +483,10 @@ class LivePlayer(WinLoseMixin, CacheClient):
             )
         self.player: PartialPlayer | Player = player
         # Champion and Skin
-        self.champion: Champion | CacheObject = cache_entry.champions.get_cached(
+        self.champion: Champion | CacheObject = cache_entry.champions._cache_object(
             player_data["ChampionId"], player_data["ChampionName"]
         )
-        self.skin: Skin | CacheObject = cache_entry.skins.get_cached(
+        self.skin: Skin | CacheObject = cache_entry.skins._cache_object(
             player_data["SkinId"], player_data["Skin"]
         )
         # Other
