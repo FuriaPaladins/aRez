@@ -422,7 +422,7 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
     ) -> LookupType | list[LookupType] | None:
         if isinstance(name_or_id, int):
             if with_cached:
-                self._id_chain_lookup.get(name_or_id)
+                return self._id_chain_lookup.get(name_or_id)
             return self._id_lookup.get(name_or_id)
         elif isinstance(name_or_id, str):
             if with_cached:
