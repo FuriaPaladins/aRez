@@ -297,6 +297,9 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
         self._name_lookup: dict[str, LookupType] = {}
         self._cached_id_lookup: dict[int, CacheObject] = {}
         self._cached_name_lookup: dict[str, CacheObject] = {}
+        self._id_chain_lookup: ChainMap[int, Any] = (
+            ChainMap(self._id_lookup, self._cached_id_lookup)
+        )
         self._name_chain_lookup: ChainMap[str, Any] = (
             ChainMap(self._name_lookup, self._cached_name_lookup)
         )
@@ -417,11 +420,15 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
     def get(
         self, name_or_id: int | str, *, with_cached: bool = False
     ) -> LookupType | list[LookupType] | None:
-        if isinstance(name_or_id, str):
+        if isinstance(name_or_id, int):
+            if with_cached:
+                self._id_chain_lookup.get(name_or_id)
+            return self._id_lookup.get(name_or_id)
+        elif isinstance(name_or_id, str):
             if with_cached:
                 return self._name_chain_lookup.get(name_or_id.lower())
             return self._name_lookup.get(name_or_id.lower())
-        return self._id_lookup.get(name_or_id)
+        raise TypeError("Argument has to be of either int or str type")
 
     def get_fuzzy(
         self, name: str, *, cutoff: float = 0.6, with_cached: bool = False
