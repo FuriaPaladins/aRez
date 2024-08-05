@@ -16,7 +16,8 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}\\test_paladins.py",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "justMyCode": false
         },
         {
             "name": "Run Tests",

@@ -555,7 +555,7 @@ class _LookupBase(Sequence[LookupType], Generic[LookupKeyType, LookupType]):
         if not with_cached:
             lookup_bank: abc.Mapping[str, LookupType | CacheObject] = self._name_lookup
         else:
-            lookup_bank = {**self._name_lookup, **self._cached_name_lookup}
+            lookup_bank = self._name_chain_lookup
         for key, element in lookup_bank.items():
             seq_matcher.set_seq1(key)
             if (
