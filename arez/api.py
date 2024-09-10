@@ -792,7 +792,7 @@ class PaladinsAPI(DataCache):
             )
         if language is None:
             language = self._default_language
-        cache_entry = await self._ensure_entry(language)
+        cache_entry = await self._fetch_entry(language)
         logger.info(f"api.get_match({match_id=}, language={language.name}, {expand_players=})")
         response = await self.request("getmatchdetails", match_id)
         if not response:
@@ -848,7 +848,7 @@ class PaladinsAPI(DataCache):
                 raise TypeError(
                     f"Incorrect type found in the iterable: int expected, got {type(match_id)}"
                 )
-        cache_entry = await self._ensure_entry(language)
+        cache_entry = await self._fetch_entry(language)
         logger.info(
             f"api.get_matches(match_ids=[{', '.join(map(str, ids_list))}], "
             f"language={language.name}, {expand_players=})"
@@ -973,7 +973,7 @@ class PaladinsAPI(DataCache):
         # exit early for a negative interval
         if end < start:
             return
-        cache_entry = await self._ensure_entry(language)
+        cache_entry = await self._fetch_entry(language)
         logger.info(
             f"api.get_matches_for_queue({queue=}, language={language.name}, "
             f"{start=} UTC, {end=} UTC, {reverse=}, {local_time=}, {expand_players=})"
@@ -1080,7 +1080,7 @@ class PaladinsAPI(DataCache):
             No bounty items were returned.\n
             This can happen if the bounty store is unavailable for a long time.
         """
-        cache_entry = await self._ensure_entry(language)
+        cache_entry = await self._fetch_entry(language)
         response = await self.request("getbountyitems")
         if not response:
             raise NotFound("Bounty items")

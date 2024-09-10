@@ -15,8 +15,9 @@
             "name": "Run Legacy Test File",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}\\tests.py",
-            "console": "integratedTerminal"
+            "program": "${workspaceFolder}\\test_paladins.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         },
         {
             "name": "Run Tests",

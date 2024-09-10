@@ -120,7 +120,7 @@ class Device(CacheObject):
 
     def _attach_champion(self, champion: Champion):
         self.champion = champion
-        if type(self.ability) is CacheObject and self.ability.name != "Unknown":
+        if type(self.ability) is CacheObject and not self.ability.is_default_name():
             # upgrade the ability to a full object if possible
             ability = champion.abilities.get(self.ability.name)
             if ability:
@@ -212,28 +212,21 @@ class Loadout(CacheObject, CacheClient):
     def __init__(
         self,
         player: PartialPlayer | Player,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         loadout_data: responses.ChampionLoadoutObject,
     ):
         assert player.id == loadout_data["playerId"]
         CacheClient.__init__(self, player._api)
         CacheObject.__init__(self, id=loadout_data["DeckId"], name=loadout_data["DeckName"])
         self.player: PartialPlayer | Player = player
-        champion: Champion | CacheObject | None = None
-        if cache_entry is not None:
-            champion = cache_entry.champions.get(loadout_data["ChampionId"])
-        if champion is None:
-            champion = CacheObject(
-                id=loadout_data["ChampionId"], name=loadout_data["ChampionName"]
-            )
-        self.champion: Champion | CacheObject = champion
+        self.champion: Champion | CacheObject = cache_entry.champions._cache_object(
+            loadout_data["ChampionId"], loadout_data["ChampionName"]
+        )
         self.cards: list[LoadoutCard] = []
         for card_data in loadout_data["LoadoutItems"]:
-            card: Device | CacheObject | None = None
-            if cache_entry is not None:
-                card = cache_entry.cards.get(card_data["ItemId"])
-            if card is None:
-                card = CacheObject(id=card_data["ItemId"], name=card_data["ItemName"])
+            card: Device | CacheObject = cache_entry.cards._cache_object(
+                card_data["ItemId"], card_data["ItemName"]
+            )
             self.cards.append(LoadoutCard(card, card_data["Points"]))
         self.cards.sort(key=lambda lc: lc.points, reverse=True)
 
@@ -298,7 +291,7 @@ class MatchLoadout:
     """
     def __init__(
         self,
-        cache_entry: CacheEntry | None,
+        cache_entry: CacheEntry,
         match_data: responses.MatchPlayerObject | responses.HistoryMatchObject,
     ):
         if "hasReplay" in match_data:
@@ -316,29 +309,22 @@ class MatchLoadout:
             if not card_id:
                 # skip 0s
                 continue
-            card: Device | CacheObject | None = None
-            if cache_entry is not None:
-                card = cache_entry.cards.get(card_id)
-            if card is None:
-                card = CacheObject(
-                    id=card_id,
-                    name=match_data[card_key.format(i)],  # type: ignore[literal-required]
-                )
+            card: Device | CacheObject = cache_entry.cards._cache_object(
+                card_id,
+                match_data[card_key.format(i)],  # type: ignore[literal-required]
+            )
             self.cards.append(
                 LoadoutCard(card, match_data[f"ItemLevel{i}"])  # type: ignore[literal-required]
             )
         self.cards.sort(key=lambda c: c.points, reverse=True)
         # talent
         talent_id: int = match_data["ItemId6"]
-        talent: Device | CacheObject | None = None
+        self.talent: Device | CacheObject | None = None
         if talent_id:
-            if cache_entry is not None:
-                talent = cache_entry.talents.get(talent_id)
-            if talent is None:
-                talent = CacheObject(
-                    id=talent_id, name=match_data[talent_key]  # type: ignore[literal-required]
-                )
-        self.talent: Device | CacheObject | None = talent
+            self.talent = cache_entry.talents._cache_object(
+                talent_id,
+                match_data[talent_key]  # type: ignore[literal-required]
+            )
         # passive
         self.passive: Passive | None = None
         if "hasReplay" in match_data:

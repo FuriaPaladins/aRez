@@ -39,7 +39,7 @@ class BountyItem(CacheClient):
         Due to API restrictions, this can be `None` for active deals.
     """
     def __init__(
-        self, api: DataCache, cache_entry: CacheEntry | None, data: responses.BountyItemObject
+        self, api: DataCache, cache_entry: CacheEntry, data: responses.BountyItemObject
     ):
         super().__init__(api)
         self.active: bool = data["active"] == 'y'
@@ -51,9 +51,6 @@ class BountyItem(CacheClient):
         final: str = data["final_price"]
         self.final_price: int | None = int(final) if final.isdecimal() else None
         # handle champion
-        champion: Champion | CacheObject | None = None
-        if cache_entry is not None:
-            champion = cache_entry.champions.get(data["champion_id"])
-        if champion is None:
-            champion = CacheObject(id=data["champion_id"], name=data["champion_name"])
-        self.champion: Champion | CacheObject = champion
+        self.champion: Champion | CacheObject = cache_entry.champions._cache_object(
+            data["champion_id"], data["champion_name"]
+        )
