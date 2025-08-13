@@ -102,7 +102,7 @@ class Endpoint:
         self._session_lock = asyncio.Lock()
         self._session_expires = datetime.datetime.now(datetime.UTC)
         self._http_session = aiohttp.ClientSession(
-            headers={"User-Agent": USER_AGENT}, timeout=DEFAULT_TIMEOUT, loop=loop
+            headers={"User-Agent": USER_AGENT}, timeout=DEFAULT_TIMEOUT, loop=loop, connector=aiohttp.TCPConnector(ssl=False)
         )
         self.__dev_id = str(dev_id)
         self.__auth_key = auth_key.upper()
